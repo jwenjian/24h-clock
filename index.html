@@ -11,8 +11,8 @@
             --text-main: #333;
             --text-muted: #888;
             --accent-color: #3b82f6;
-            --day-color: #f59e0b;
-            --night-color: #4f46e5;
+            --day-color: #f59e0b;   /* 太阳颜色 */
+            --night-color: #4f46e5; /* 月亮颜色 */
             --shadow-light: #ffffff;
             --shadow-dark: #a3b1c6;
             --hand-color: #1f2937;
@@ -100,24 +100,42 @@
             height: 100%;
             border-radius: 50%;
             z-index: 1;
-            opacity: 0.1;
-            /* 0点在顶，顺时针旋转。右侧(0-12)白天，左侧(12-24)黑夜 */
+            opacity: 0.15; 
+            /* 右侧(0-12h)白天，左侧(12-24h)黑夜 */
             background: conic-gradient(
                 from 270deg, 
                 var(--day-color) 0% 50%,     
                 var(--night-color) 50% 100%  
             );
+            filter: blur(20px);
         }
 
         .clock-face {
             position: relative;
-            width: 98%;
-            height: 98%;
+            width: 100%;
+            height: 100%;
             border-radius: 50%;
             background: var(--clock-bg);
             z-index: 2;
             box-shadow: inset 5px 5px 15px var(--shadow-dark), 
                         inset -5px -5px 15px var(--shadow-light);
+        }
+
+        /* 巨大的背景图标 (替代之前的 AM/PM 文字) */
+        .bg-icon {
+            position: absolute;
+            font-size: 10rem;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 3;
+            opacity: 0.08; /* 非常淡，作为背景 */
+            line-height: 1;
+        }
+        .bg-sun {
+            color: var(--day-color);
+        }
+        .bg-moon {
+            color: var(--night-color);
         }
 
         /* 刻度通用样式 */
@@ -127,6 +145,7 @@
             text-align: center;
             user-select: none;
             pointer-events: none;
+            z-index: 10;
         }
 
         /* 外圈：分/秒刻度 (0-59) */
@@ -139,8 +158,8 @@
         }
         
         .marker-minute.tick-only {
-            width: 4px;
-            height: 4px;
+            width: 3px;
+            height: 3px;
             background-color: var(--tick-color);
             border-radius: 50%;
         }
@@ -171,7 +190,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 10;
+            z-index: 20;
             pointer-events: none;
         }
 
@@ -219,6 +238,7 @@
             transform: translate(-50%, -50%);
             z-index: 14;
             border: 3px solid var(--clock-bg);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
         /* 数字时间 */
@@ -246,6 +266,9 @@
                 height: 28px;
                 line-height: 28px;
             }
+            .bg-icon {
+                font-size: 6rem;
+            }
         }
     </style>
 </head>
@@ -258,6 +281,9 @@
     <div class="clock-container">
         <div class="day-night-ring"></div>
         <div class="clock-face" id="clockFace">
+            
+            <!-- 背景太阳和月亮将通过 JS 动态定位生成 -->
+            
             <!-- 刻度将通过 JS 生成 -->
             <div class="hands-container">
                 <div class="hand hour" id="hourHand"></div>
@@ -280,24 +306,44 @@
         const themeIcon = document.getElementById('themeIcon');
         const body = document.body;
 
-        // 使用三角函数绝对定位，不再使用 rotate 变换，确保 0 点绝对在正上方
         function initFace() {
-            // 清空除了指针和中心点以外的内容
-            const existingMarkers = document.querySelectorAll('.marker');
-            existingMarkers.forEach(m => m.remove());
+            // 清理旧刻度
+            document.querySelectorAll('.marker, .bg-icon').forEach(el => el.remove());
 
             const size = clockFace.offsetWidth;
             const centerX = size / 2;
             const centerY = size / 2;
             
             // 半径定义
-            const radiusMinute = (size / 2) - 15; // 外圈 (分) 稍微留点边距
-            const radiusHour = (size / 2) - 55;    // 内圈 (时)
+            const radiusMinute = (size / 2) - 25; // 外圈刻度
+            const radiusHour = (size / 2) - 65;   // 内圈刻度
+            
+            // 背景图标半径 (大约在半径 1/2 处，正右和正左)
+            const radiusIcon = (size / 2) * 0.6; 
 
-            // 1. 生成外圈 0-59 (分/秒)
+            // 1. 生成巨大的背景图标
+            // 太阳在右侧 (90度) -> 对应 6点钟方向 (0-12h 的一半)
+            const sunIcon = document.createElement('div');
+            sunIcon.className = 'bg-icon bg-sun';
+            sunIcon.innerHTML = '☀️';
+            const sunAngleRad = 90 * (Math.PI / 180);
+            sunIcon.style.left = `${centerX + radiusIcon * Math.sin(sunAngleRad)}px`;
+            sunIcon.style.top = `${centerY - radiusIcon * Math.cos(sunAngleRad)}px`;
+            clockFace.appendChild(sunIcon);
+
+            // 月亮在左侧 (270度) -> 对应 18点钟方向 (12-24h 的一半)
+            const moonIcon = document.createElement('div');
+            moonIcon.className = 'bg-icon bg-moon';
+            moonIcon.innerHTML = '🌙';
+            const moonAngleRad = 270 * (Math.PI / 180);
+            moonIcon.style.left = `${centerX + radiusIcon * Math.sin(moonAngleRad)}px`;
+            moonIcon.style.top = `${centerY - radiusIcon * Math.cos(moonAngleRad)}px`;
+            clockFace.appendChild(moonIcon);
+
+
+            // 2. 生成外圈 0-59 (分/秒)
             for (let i = 0; i < 60; i++) {
                 const marker = document.createElement('div');
-                // 如果是 5 的倍数显示数字，否则显示小圆点
                 const isNumber = i % 5 === 0;
                 
                 if (isNumber) {
@@ -307,11 +353,7 @@
                     marker.className = 'marker marker-minute tick-only';
                 }
 
-                // 角度计算：0度在正上方
-                // x = cx + r * sin(angle)
-                // y = cy - r * cos(angle)  (注意 cos 前是减号，因为 Y 轴向下为正)
                 const angleRad = (i * 6) * (Math.PI / 180);
-                
                 const left = centerX + radiusMinute * Math.sin(angleRad);
                 const top = centerY - radiusMinute * Math.cos(angleRad);
 
@@ -321,7 +363,7 @@
                 clockFace.appendChild(marker);
             }
 
-            // 2. 生成内圈 0-23 (时)
+            // 3. 生成内圈 0-23 (时)
             for (let i = 0; i <= 23; i++) {
                 const marker = document.createElement('div');
                 marker.className = 'marker marker-hour';
@@ -333,9 +375,7 @@
                 if (i === 0) marker.classList.add('marker-0');
                 if (i === 24) marker.style.display = 'none';
 
-                // 角度计算：每小时 15 度
                 const angleRad = (i * 15) * (Math.PI / 180);
-                
                 const left = centerX + radiusHour * Math.sin(angleRad);
                 const top = centerY - radiusHour * Math.cos(angleRad);
 
@@ -354,11 +394,8 @@
             const hr = now.getHours();
 
             // 指针角度：0度在正上方
-            // 时针：360 / 24 = 15度/小时
             const hrDeg = ((hr % 24) + min / 60) * 15;
-            // 分针：360 / 60 = 6度/分钟
             const minDeg = (min + sec / 60) * 6;
-            // 秒针：360 / 60 = 6度/秒
             const secDeg = (sec + milli / 1000) * 6;
 
             hourHand.style.transform = `rotate(${hrDeg}deg)`;
@@ -371,7 +408,6 @@
             requestAnimationFrame(updateClock);
         }
 
-        // 窗口大小改变时重绘刻度位置
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
@@ -389,10 +425,8 @@
             }
         });
 
-        // 启动
         initFace();
         updateClock();
-
     </script>
 </body>
 </html>
