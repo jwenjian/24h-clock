@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>24H Clock</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --clock-bg: #e0e5ec;
+            --text-main: #333;
+            --text-muted: #888;
+            --accent-color: #3b82f6;
+            --day-color: #f59e0b;
+            --night-color: #4f46e5;
+            --shadow-light: #ffffff;
+            --shadow-dark: #a3b1c6;
+            --hand-color: #1f2937;
+            --second-hand: #ef4444;
+            --tick-color: #ccc;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #111113;
+            --clock-bg: #1a1b1e;
+            --text-main: #e0e0e0;
+            --text-muted: #555;
+            --shadow-light: #25262b;
+            --shadow-dark: #000000;
+            --hand-color: #f0f0f0;
+            --day-color: #d97706;
+            --night-color: #6366f1;
+            --tick-color: #444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: var(--clock-bg);
+            color: var(--text-main);
+            font-size: 1.2rem;
+            cursor: pointer;
+            box-shadow: 5px 5px 10px var(--shadow-dark), 
+                        -5px -5px 10px var(--shadow-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .theme-toggle:active {
+            box-shadow: inset 5px 5px 10px var(--shadow-dark), 
+                        inset -5px -5px 10px var(--shadow-light);
+        }
+
+        .clock-container {
+            position: relative;
+            width: 85vmin;
+            height: 85vmin;
+            max-width: 600px;
+            max-height: 600px;
+            border-radius: 50%;
+            background: var(--clock-bg);
+            box-shadow: 
+                25px 25px 50px var(--shadow-dark), 
+                -25px -25px 50px var(--shadow-light);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 背景昼夜环 */
+        .day-night-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            z-index: 1;
+            opacity: 0.1;
+            /* 0点在顶，顺时针旋转。右侧(0-12)白天，左侧(12-24)黑夜 */
+            background: conic-gradient(
+                from 270deg, 
+                var(--day-color) 0% 50%,     
+                var(--night-color) 50% 100%  
+            );
+        }
+
+        .clock-face {
+            position: relative;
+            width: 98%;
+            height: 98%;
+            border-radius: 50%;
+            background: var(--clock-bg);
+            z-index: 2;
+            box-shadow: inset 5px 5px 15px var(--shadow-dark), 
+                        inset -5px -5px 15px var(--shadow-light);
+        }
+
+        /* 刻度通用样式 */
+        .marker {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        /* 外圈：分/秒刻度 (0-59) */
+        .marker-minute {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            width: 20px;
+            height: 20px;
+            line-height: 20px;
+        }
+        
+        .marker-minute.tick-only {
+            width: 4px;
+            height: 4px;
+            background-color: var(--tick-color);
+            border-radius: 50%;
+        }
+
+        /* 内圈：时刻度 (0-23) */
+        .marker-hour {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            width: 36px;
+            height: 36px;
+            line-height: 36px;
+        }
+
+        .marker-hour.key-marker {
+            font-weight: 800;
+            color: var(--text-main);
+            font-size: 1.4rem;
+        }
+        .marker-hour.marker-0 {
+            color: var(--accent-color);
+        }
+
+        /* 指针 */
+        .hands-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .hand {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            border-radius: 10px;
+            z-index: 10;
+        }
+
+        .hand.hour {
+            width: 8px;
+            height: 28%; 
+            background-color: var(--hand-color);
+            margin-left: -4px;
+            z-index: 11;
+        }
+
+        .hand.minute {
+            width: 5px;
+            height: 42%;
+            background-color: var(--hand-color);
+            margin-left: -2.5px;
+            z-index: 12;
+        }
+
+        .hand.second {
+            width: 2px;
+            height: 48%;
+            background-color: var(--second-hand);
+            margin-left: -1px;
+            z-index: 13;
+        }
+
+        .center-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 14px;
+            height: 14px;
+            background-color: var(--second-hand);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 14;
+            border: 3px solid var(--clock-bg);
+        }
+
+        /* 数字时间 */
+        .digital-readout {
+            margin-top: 2rem;
+            font-size: 3rem;
+            font-weight: 300;
+            color: var(--text-main);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.05);
+        }
+
+        @media (max-width: 600px) {
+            .clock-container {
+                width: 90vmin;
+                height: 90vmin;
+            }
+            .digital-readout {
+                font-size: 2rem;
+            }
+            .marker-hour {
+                font-size: 0.9rem;
+                width: 28px;
+                height: 28px;
+                line-height: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <button class="theme-toggle" id="themeToggle">
+        <span id="themeIcon">🌙</span>
+    </button>
+
+    <div class="clock-container">
+        <div class="day-night-ring"></div>
+        <div class="clock-face" id="clockFace">
+            <!-- 刻度将通过 JS 生成 -->
+            <div class="hands-container">
+                <div class="hand hour" id="hourHand"></div>
+                <div class="hand minute" id="minuteHand"></div>
+                <div class="hand second" id="secondHand"></div>
+            </div>
+            <div class="center-dot"></div>
+        </div>
+    </div>
+
+    <div class="digital-readout" id="digitalTime">00:00:00</div>
+
+    <script>
+        const clockFace = document.getElementById('clockFace');
+        const hourHand = document.getElementById('hourHand');
+        const minuteHand = document.getElementById('minuteHand');
+        const secondHand = document.getElementById('secondHand');
+        const digitalTime = document.getElementById('digitalTime');
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const body = document.body;
+
+        // 使用三角函数绝对定位，不再使用 rotate 变换，确保 0 点绝对在正上方
+        function initFace() {
+            // 清空除了指针和中心点以外的内容
+            const existingMarkers = document.querySelectorAll('.marker');
+            existingMarkers.forEach(m => m.remove());
+
+            const size = clockFace.offsetWidth;
+            const centerX = size / 2;
+            const centerY = size / 2;
+            
+            // 半径定义
+            const radiusMinute = (size / 2) - 15; // 外圈 (分) 稍微留点边距
+            const radiusHour = (size / 2) - 55;    // 内圈 (时)
+
+            // 1. 生成外圈 0-59 (分/秒)
+            for (let i = 0; i < 60; i++) {
+                const marker = document.createElement('div');
+                // 如果是 5 的倍数显示数字，否则显示小圆点
+                const isNumber = i % 5 === 0;
+                
+                if (isNumber) {
+                    marker.className = 'marker marker-minute';
+                    marker.textContent = i;
+                } else {
+                    marker.className = 'marker marker-minute tick-only';
+                }
+
+                // 角度计算：0度在正上方
+                // x = cx + r * sin(angle)
+                // y = cy - r * cos(angle)  (注意 cos 前是减号，因为 Y 轴向下为正)
+                const angleRad = (i * 6) * (Math.PI / 180);
+                
+                const left = centerX + radiusMinute * Math.sin(angleRad);
+                const top = centerY - radiusMinute * Math.cos(angleRad);
+
+                marker.style.left = `${left}px`;
+                marker.style.top = `${top}px`;
+
+                clockFace.appendChild(marker);
+            }
+
+            // 2. 生成内圈 0-23 (时)
+            for (let i = 0; i <= 23; i++) {
+                const marker = document.createElement('div');
+                marker.className = 'marker marker-hour';
+                marker.textContent = i;
+
+                if (i === 0 || i === 6 || i === 12 || i === 18) {
+                    marker.classList.add('key-marker');
+                }
+                if (i === 0) marker.classList.add('marker-0');
+                if (i === 24) marker.style.display = 'none';
+
+                // 角度计算：每小时 15 度
+                const angleRad = (i * 15) * (Math.PI / 180);
+                
+                const left = centerX + radiusHour * Math.sin(angleRad);
+                const top = centerY - radiusHour * Math.cos(angleRad);
+
+                marker.style.left = `${left}px`;
+                marker.style.top = `${top}px`;
+
+                clockFace.appendChild(marker);
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const milli = now.getMilliseconds();
+            const sec = now.getSeconds();
+            const min = now.getMinutes();
+            const hr = now.getHours();
+
+            // 指针角度：0度在正上方
+            // 时针：360 / 24 = 15度/小时
+            const hrDeg = ((hr % 24) + min / 60) * 15;
+            // 分针：360 / 60 = 6度/分钟
+            const minDeg = (min + sec / 60) * 6;
+            // 秒针：360 / 60 = 6度/秒
+            const secDeg = (sec + milli / 1000) * 6;
+
+            hourHand.style.transform = `rotate(${hrDeg}deg)`;
+            minuteHand.style.transform = `rotate(${minDeg}deg)`;
+            secondHand.style.transform = `rotate(${secDeg}deg)`;
+
+            const pad = (num) => num.toString().padStart(2, '0');
+            digitalTime.textContent = `${pad(hr)}:${pad(min)}:${pad(sec)}`;
+
+            requestAnimationFrame(updateClock);
+        }
+
+        // 窗口大小改变时重绘刻度位置
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(initFace, 100);
+        });
+
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = body.getAttribute('data-theme');
+            if (currentTheme === 'dark') {
+                body.setAttribute('data-theme', 'light');
+                themeIcon.textContent = '🌙';
+            } else {
+                body.setAttribute('data-theme', 'dark');
+                themeIcon.textContent = '☀️';
+            }
+        });
+
+        // 启动
+        initFace();
+        updateClock();
+
+    </script>
+</body>
+</html>
